@@ -48,6 +48,160 @@ function card(p) {
     </article>
   `;
 }
+// 포켓몬 상세 정보 불러오기
+async function openPokemonDetail(id) {
+  const detailDialog = $("pokemonDetailDialog");
+  const detailContent = $("detailContent");
+
+  detailDialog.showModal();
+  $("detailTitle").textContent = "포켓몬 정보";
+  detailContent.innerHTML = `<div class="detail-loading">정보를 불러오는 중입니다...</div>`;
+
+  try {
+    const data = await api(`/api/pokemon/detail?id=${encodeURIComponent(id)}`);
+    const p = data.pokemon;
+    const stats = data.go_stats?.[0];
+
+    $("detailTitle").textContent = p.korean_name;
+
+    const image = p.image_url
+      ? `<img src="${esc(p.image_url)}" alt="${esc(p.korean_name)}">`
+      : "";
+
+    const info = (label, value) => `
+      <div>
+        <small>${esc(label)}</small>
+        <strong>${esc(value ?? "-")}</strong>
+      </div>
+    `;
+
+    const section = (title, items, render) => {
+      if (!items?.length) return "";
+      return `
+        <section class="detail-section">
+          <h3>${esc(title)}</h3>
+          <div class="detail-list">
+            ${items.map(render).join("")}
+          </div>
+        </section>
+      `;
+    };
+
+    const item = (title, description) => `
+      <div class="detail-item">
+        <strong>${esc(title)}</strong>
+        <small>${esc(description || "-")}</small>
+      </div>
+    `;
+
+    detailContent.innerHTML = `
+      <div class="detail-hero">
+        ${image}
+        <div class="detail-info">
+          ${info("도감 번호", `No. ${String(p.national_number).padStart(4, "0")}`)}
+          ${info("영문 이름", p.english_name)}
+          ${info("타입", [p.type1, p.type2].filter(Boolean).join(" / "))}
+          ${info("폼", p.form_name)}
+          ${info("세대", p.generation)}
+          ${info("지역", p.region)}
+        </div>
+      </div>
+
+      ${p.description ? `
+        <section class="detail-section">
+          <h3>도감 설명</h3>
+          <p>${esc(p.description)}</p>
+        </section>
+      ` : ""}
+
+      ${stats ? `
+        <section class="detail-section">
+          <h3>포켓몬 GO 능력치</h3>
+          <div class="detail-info">
+            ${info("공격", stats.attack)}
+            ${info("방어", stats.defense)}
+            ${info("체력", stats.stamina)}
+            ${info("최대 CP", stats.max_cp)}
+            ${info("최대 HP", stats.max_hp)}
+            ${info("파트너 거리", stats.buddy_distance)}
+          </div>
+        </section>
+      ` : ""}
+
+      ${section("포켓몬 GO 추천 기술", data.go_recommendations,
+        m => item(
+          `${m.name_ko || m.name_en} (${m.move_slot || "-"})`,
+          `${m.move_type || "-"} · ${m.category || "-"} · 위력 ${m.power ?? "-"} · 에너지 ${m.energy ?? "-"}`
+        )
+      )}
+
+      ${section("본가 기술", data.main_moves,
+        m => item(
+          m.name_ko || m.name_en,
+          `${m.generation || "-"}세대 · ${m.learn_method || "-"} · 레벨 ${m.level ?? "-"}`
+        )
+      )}
+
+      ${section("폼", data.forms,
+        f => item(
+          f.form_name || f.form_name_en,
+          `${f.region || "-"} · ${[f.type1, f.type2].filter(Boolean).join(" / ")}`
+        )
+      )}
+
+      ${section("코스튬", data.costumes,
+        c => item(
+          c.costume_name || c.costume_name_en,
+          `${c.event_name || "-"} · ${c.release_date || "-"}`
+        )
+      )}
+
+      ${section("변신", data.transformations,
+        t => item(
+          t.transformation_name || t.target_form_name,
+          t.description || t.transformation_type
+        )
+      )}
+
+      ${section("게임별 설명", data.descriptions,
+        d => item(
+          d.game_title || `${d.generation || ""}세대`,
+          d.description
+        )
+      )}
+    `;
+  } catch (e) {
+    detailContent.innerHTML = `
+      <div class="detail-error">
+        상세 정보를 불러오지 못했습니다.<br>
+        ${esc(e.message)}
+      </div>
+    `;
+  }
+}
+
+// 포켓몬 카드 클릭 및 키보드 실행
+$("grid").addEventListener("click", e => {
+  const cardElement = e.target.closest("[data-pokemon-id]");
+  if (!cardElement) return;
+
+  openPokemonDetail(cardElement.dataset.pokemonId);
+});
+
+$("grid").addEventListener("keydown", e => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+
+  const cardElement = e.target.closest("[data-pokemon-id]");
+  if (!cardElement) return;
+
+  e.preventDefault();
+  openPokemonDetail(cardElement.dataset.pokemonId);
+});
+
+// 상세 창 닫기
+$("detailClose").onclick = () => {
+  $("pokemonDetailDialog").close();
+};
 async function loadPublic() {
   const q = $("search").value.trim();
   const type = $("typeFilter").value;
