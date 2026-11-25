@@ -387,21 +387,21 @@ async function mainImportWaitIfPaused() {
   }
 }
 
-// 기존 api() 함수 사용
-async function mainImportPost(path, body) {
-  const response = await api(path, {
+
+// 기존 api() 함수를 사용해 자동 수집 요청
+async function mainImportRequest(path, body) {
+  const data = await api(path, {
     method: "POST",
     body: JSON.stringify(body)
   });
 
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok || data.ok === false) {
-    throw new Error(data.error || `HTTP ${response.status}`);
+  if (data.ok === false) {
+    throw new Error(data.error || "자동 수집 요청 실패");
   }
 
   return data;
 }
+
 async function mainImportRetryFailed() {
   const s = mainImportState;
 
