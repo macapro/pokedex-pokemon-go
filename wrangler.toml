@@ -1,3 +1,4 @@
+
 name = "pokedex-pokemon-go-api"
 main = "worker/index.js"
 compatibility_date = "2026-11-25"
@@ -5,7 +6,7 @@ compatibility_date = "2026-11-25"
 [[d1_databases]]
 binding = "DB"
 database_name = "pokedex-pokemon-go-db"
-database_id = "PUT_YOUR_D1_DATABASE_ID_HERE"
+database_id = "c955f058-a824-4058-b181-168012baf3fb"
 
 [vars]
 SITE_ORIGIN = "https://PUT-YOUR-PAGES-DOMAIN.pages.dev"
