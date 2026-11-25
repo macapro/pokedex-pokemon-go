@@ -119,7 +119,57 @@ export default {
         return json({ authenticated: admin }, 200, cors);
       }
 
-      if (path.startsWith("/api/admin/")) {
+      if (path.startsWith("/api/admin/")) {        // 포켓몬 GO 능력치 조회
+        if (path === "/api/admin/go-stats" && request.method === "GET") {
+          const result = await env.DB.prepare(`
+            SELECT s.*, p.korean_name, p.national_number
+            FROM pokemon_go_stats s
+            JOIN pokemon p ON p.id = s.pokemon_id
+            ORDER BY p.national_number
+          `).all();
+
+          return json({ items: result.results || [] }, 200, cors);
+        }
+
+        // 포켓몬 GO 능력치 등록 및 수정
+        if (path === "/api/admin/go-stats" && request.method === "POST") {
+          const body = await request.json();
+
+          const pokemonId = Number(body.pokemon_id);
+          if (!Number.isInteger(pokemonId) || pokemonId < 1) {
+            return json({ error: "포켓몬 ID가 올바르지 않습니다." }, 400, cors);
+          }
+
+          const values = [
+            pokemonId,
+            body.attack == null ? null : Number(body.attack),
+            body.defense == null ? null : Number(body.defense),
+            body.stamina == null ? null : Number(body.stamina),
+            body.max_cp == null ? null : Number(body.max_cp),
+            body.max_hp == null ? null : Number(body.max_hp),
+            body.buddy_distance == null ? null : Number(body.buddy_distance)
+          ];
+
+          if (values.slice(1).some(v => v !== null && (!Number.isFinite(v) || v < 0))) {
+            return json({ error: "능력치 값이 올바르지 않습니다." }, 400, cors);
+          }
+
+          await env.DB.prepare(`
+            INSERT INTO pokemon_go_stats
+            (pokemon_id, attack, defense, stamina, max_cp, max_hp, buddy_distance)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(pokemon_id) DO UPDATE SET
+              attack=excluded.attack,
+              defense=excluded.defense,
+              stamina=excluded.stamina,
+              max_cp=excluded.max_cp,
+              max_hp=excluded.max_hp,
+              buddy_distance=excluded.buddy_distance
+          `).bind(...values).run();
+
+          return json({ ok: true }, 200, cors);
+        }
+
         if (!admin) return json({ error: "관리자 로그인이 필요합니다." }, 401, cors);
 
         if (path === "/api/admin/pokemon" && request.method === "GET") {
