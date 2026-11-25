@@ -494,6 +494,114 @@ export default {
 
       if (path.startsWith("/api/admin/")) {
         if (!admin) return json({ error: "관리자 로그인이 필요합니다." }, 401, cors);
+        // 전국도감 포켓몬 데이터 일괄 가져오기
+if (path === "/api/admin/import/pokemon" && request.method === "POST") {
+  let body = {};
+
+  try {
+    body = await request.json();
+  } catch {
+    body = {};
+  }
+
+  const offset = Number(body.offset ?? 0);
+  const limit = Number(body.limit ?? 10);
+
+  if (
+    !Number.isInteger(offset) ||
+    offset < 0 ||
+    offset > 1024 ||
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > 10
+  ) {
+    return json({
+      error: "offset은 0~1024, limit은 1~10으로 입력해 주세요."
+    }, 400, cors);
+  }
+
+  const end = Math.min(offset + limit, 1025);
+  const imported = [];
+  const failed = [];
+
+  for (let id = offset + 1; id <= end; id++) {
+    try {
+      const pokemon = await fetchPokemonImportItem(id);
+      imported.push(pokemon);
+    } catch (error) {
+      failed.push({
+        national_number: id,
+        error: String(error.message || error)
+      });
+    }
+  }
+
+  const statements = imported.map(p =>
+    env.DB.prepare(`
+      INSERT INTO pokemon (
+        national_number,
+        slug,
+        korean_name,
+        english_name,
+        form_name,
+        generation,
+        region,
+        image_url,
+        type1,
+        type2,
+        description,
+        is_published,
+        sort_order,
+        updated_at
+      )
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM pokemon
+        WHERE national_number = ?
+          AND form_name = ?
+      )
+    `).bind(
+      p.national_number,
+      p.slug,
+      p.korean_name,
+      p.english_name,
+      p.form_name,
+      p.generation,
+      p.region,
+      p.image_url,
+      p.type1,
+      p.type2,
+      p.description,
+      p.is_published,
+      p.sort_order,
+      p.national_number,
+      p.form_name
+    )
+  );
+
+  let inserted = 0;
+
+  if (statements.length > 0) {
+    const results = await env.DB.batch(statements);
+    inserted = results.reduce(
+      (sum, result) => sum + (result.meta?.changes || 0),
+      0
+    );
+  }
+
+  return json({
+    ok: true,
+    requested: end - offset,
+    fetched: imported.length,
+    inserted,
+    skipped: imported.length - inserted,
+    failed,
+    next_offset: end,
+    completed: end >= 1025
+  }, 200, cors);
+}
+
                 // 포켓몬 GO 능력치 조회
         if (path === "/api/admin/go-stats" && request.method === "GET") {
           const result = await env.DB.prepare(`
