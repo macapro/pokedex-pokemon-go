@@ -9,4 +9,4 @@ database_name = "pokedex-pokemon-go-db"
 database_id = "c955f058-a824-4058-b181-168012baf3fb"
 
 [vars]
-SITE_ORIGIN = "https://PUT-YOUR-PAGES-DOMAIN.pages.dev"
+SITE_ORIGIN = "https://pokedex-pokemon-go.pages.dev"
