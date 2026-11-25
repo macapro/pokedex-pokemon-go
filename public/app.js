@@ -402,39 +402,59 @@ async function mainImportPost(path, body) {
 
   return data;
 }
+async function mainImportRetryFailed() {
+  const s = mainImportState;
 
-// 한 요청을 최대 3회 재시도
-async function mainImportRequest(path, body) {
-  let lastError;
+  if (s.running || !s.failedJobs.length) return;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    await mainImportWaitIfPaused();
+  s.running = true;
+  s.paused = false;
 
-    try {
-      const result = await mainImportPost(path, body);
+  const jobs = [...s.failedJobs];
+  s.failedJobs = [];
 
-      if (result.failed && result.failed.length > 0) {
-        throw new Error(
-          `일부 항목 수집 실패: ${result.failed.length}개`
+  mainImportRender();
+
+  try {
+    for (const job of jobs) {
+      await mainImportWaitIfPaused();
+
+      try {
+        // 개별 항목 실패는 기존 API의 배치 재수집으로 처리
+        const result = await mainImportPost(
+          job.path,
+          job.body
+        );
+
+        if (result.failed?.length) {
+          s.failedJobs.push({
+            ...job,
+            attempts: job.attempts + 1
+          });
+        } else {
+          mainImportLog("실패 작업 재시도 성공");
+        }
+      } catch (error) {
+        s.failedJobs.push({
+          ...job,
+          attempts: job.attempts + 1
+        });
+
+        mainImportLog(
+          `재시도 실패: ${error.message}`
         );
       }
 
-      return result;
-    } catch (error) {
-      lastError = error;
-
-      mainImportLog(
-        `요청 실패 (${attempt}/3): ${error.message}`
-      );
-
-      if (attempt < 3) {
-        await mainImportSleep(1000 * attempt);
-      }
+      await mainImportSleep(300);
+      mainImportRender();
     }
+  } finally {
+    s.running = false;
+    s.paused = false;
+    mainImportRender();
   }
-
-  throw lastError;
 }
+
 
 // ------------------------------------------
 // 1단계: 본가 기술 수집
