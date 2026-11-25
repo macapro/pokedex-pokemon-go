@@ -25,6 +25,21 @@
     <section id="about" class="about"><p class="eyebrow">YOUR POKÉDEX</p><h2>직접 채워가는 포켓몬 도감</h2><p>도감 데이터는 관리자만 등록·수정·공개할 수 있습니다.</p></section>
   </main>
   <footer>POKÉDEX포켓몬고 <span>Independent Pokémon database</span></footer>
+    <!-- 포켓몬 상세 정보 창 -->
+  <dialog id="pokemonDetailDialog" class="pokemon-detail-dialog">
+    <div class="detail-header">
+      <div>
+        <p class="eyebrow">POKÉMON DETAIL</p>
+        <h2 id="detailTitle">포켓몬 상세 정보</h2>
+      </div>
+      <button id="detailClose" class="icon-btn" aria-label="닫기">×</button>
+    </div>
+
+    <div id="detailContent">
+      <div class="empty">포켓몬 정보를 불러오는 중입니다.</div>
+    </div>
+  </dialog>
+  
 
   <dialog id="adminDialog">
     <div class="dialog-head"><div><p class="eyebrow">ADMIN CONSOLE</p><h2>관리자 센터</h2></div><button class="icon-btn" id="adminClose" aria-label="닫기">×</button></div>
