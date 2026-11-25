@@ -66,6 +66,27 @@
       </form>
       <div id="adminList" class="admin-list"></div>
       <p id="adminMessage" class="message"></p>
+      <section class="admin-section" id="mainAutoImport">
+  <h2>본가 기술 자동 수집</h2>
+  <p>본가 기술과 포켓몬별 습득 기술을 자동으로 수집합니다.</p>
+
+  <div class="import-actions">
+    <button id="mainImportStart">전체 자동 수집 시작</button>
+    <button id="mainImportPause" disabled>일시정지</button>
+    <button id="mainImportResume" disabled>재개</button>
+    <button id="mainImportRetry" disabled>실패 항목 재수집</button>
+  </div>
+
+  <div class="import-progress">
+    <div id="mainImportStatus">대기 중</div>
+    <progress id="mainImportProgress" max="100" value="0"></progress>
+    <strong id="mainImportPercent">0%</strong>
+  </div>
+
+  <div id="mainImportGenerationStatus"></div>
+  <pre id="mainImportLog"></pre>
+</section>
+
     </div>
   </dialog>
   <script src="./app.js"></script>
