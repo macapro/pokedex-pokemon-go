@@ -19,9 +19,34 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 }
 function card(p) {
-  const image = p.image_url ? `<img src="${esc(p.image_url)}" alt="${esc(p.korean_name)}" loading="lazy" onerror="this.remove()">` : "";
-  const types = [p.type1,p.type2].filter(Boolean).map(t => `<span class="tag">${esc(t)}</span>`).join("");
-  return `<article class="pokemon-card"><div class="pokemon-art">${image}<span class="placeholder" ${p.image_url ? 'hidden' : ''}>?</span></div><div class="poke-number">No. ${String(p.national_number).padStart(4,"0")}</div><h3>${esc(p.korean_name)} <small>${esc(p.form_name || "")}</small></h3><div class="tags">${types}</div></article>`;
+  const image = p.image_url
+    ? `<img src="${esc(p.image_url)}" alt="${esc(p.korean_name)}" loading="lazy" onerror="this.remove()">`
+    : "";
+
+  const types = [p.type1,p.type2]
+    .filter(Boolean)
+    .map(t => `<span class="tag">${esc(t)}</span>`)
+    .join("");
+
+  return `
+    <article class="pokemon-card"
+      data-pokemon-id="${p.id}"
+      role="button"
+      tabindex="0">
+      <div class="pokemon-art">
+        ${image}
+        <span class="placeholder" ${p.image_url ? "hidden" : ""}>?</span>
+      </div>
+      <div class="poke-number">
+        No. ${String(p.national_number).padStart(4,"0")}
+      </div>
+      <h3>
+        ${esc(p.korean_name)}
+        <small>${esc(p.form_name || "")}</small>
+      </h3>
+      <div class="tags">${types}</div>
+    </article>
+  `;
 }
 async function loadPublic() {
   const q = $("search").value.trim();
