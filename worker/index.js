@@ -699,6 +699,175 @@ if (path === "/api/admin/import/pokemon" && request.method === "POST") {
     completed: end >= 1025
   }, 200, cors);
 }
+// 본가 기술 및 포켓몬별 습득 기술 자동 수집
+if (path === "/api/admin/import/main-learnsets" && request.method === "POST") {
+  const body = await request.json().catch(() => ({}));
+
+  const offset = Number(body.offset ?? 0);
+  const limit = Number(body.limit ?? 10);
+  const generation = Number(body.generation ?? 9);
+
+  if (
+    !Number.isInteger(offset) || offset < 0 ||
+    !Number.isInteger(limit) || limit < 1 || limit > 10 ||
+    !Number.isInteger(generation) || generation < 1 || generation > 9
+  ) {
+    return json({ error: "입력값을 확인해 주세요." }, 400, cors);
+  }
+
+  const pokemonList = await env.DB.prepare(`
+    SELECT id, national_number, slug
+    FROM pokemon
+    WHERE is_published = 1
+    ORDER BY national_number
+    LIMIT ? OFFSET ?
+  `).bind(limit, offset).all();
+
+  const importedMoves = new Map();
+  const learnsets = [];
+  const failed = [];
+
+  for (const p of pokemonList.results || []) {
+    try {
+      const response = await fetch(
+        `https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(p.slug)}/`
+      );
+
+      if (!response.ok) throw new Error(`PokéAPI ${response.status}`);
+
+      const data = await response.json();
+
+      for (const move of data.moves || []) {
+        for (const detail of move.version_group_details || []) {
+          const vg = detail.version_group.name;
+          const genMatch = vg.match(/^(red-blue|gold-silver|ruby-sapphire|diamond-pearl|black-white|x-y|sun-moon|sword-shield|scarlet-violet)/);
+
+          const generationMap = {
+            "red-blue": 1,
+            "gold-silver": 2,
+            "ruby-sapphire": 3,
+            "diamond-pearl": 4,
+            "black-white": 5,
+            "x-y": 6,
+            "sun-moon": 7,
+            "sword-shield": 8,
+            "scarlet-violet": 9
+          };
+
+          const gen = generationMap[genMatch?.[1]];
+          if (gen !== generation) continue;
+
+          const moveName = move.move.name;
+
+          if (!importedMoves.has(moveName)) {
+            const moveResponse = await fetch(move.move.url);
+            if (!moveResponse.ok) continue;
+
+            const moveData = await moveResponse.json();
+
+            importedMoves.set(moveName, {
+              name_en: moveName,
+              name_ko: moveData.names?.find(
+                n => n.language.name === "ko"
+              )?.name || moveName,
+              move_type: moveData.type?.name || "",
+              category: moveData.damage_class?.name || "",
+              power: moveData.power
+            });
+          }
+
+          learnsets.push({
+            pokemon_id: p.id,
+            move: moveName,
+            generation: gen,
+            version_group: vg,
+            learn_method: detail.move_learn_method.name,
+            level: detail.level_learned_at
+          });
+        }
+      }
+    } catch (e) {
+      failed.push({
+        pokemon: p.slug,
+        error: String(e.message || e)
+      });
+    }
+  }
+
+  const moveStatements = [];
+
+  for (const m of importedMoves.values()) {
+    moveStatements.push(env.DB.prepare(`
+      INSERT INTO main_series_moves
+      (name_ko, name_en, move_type, category, power)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(name_en) DO UPDATE SET
+        name_ko=excluded.name_ko,
+        move_type=excluded.move_type,
+        category=excluded.category,
+        power=excluded.power
+    `).bind(m.name_ko, m.name_en, m.move_type, m.category, m.power));
+  }
+
+  if (moveStatements.length) {
+    await env.DB.batch(moveStatements);
+  }
+
+  const moveRows = await env.DB.prepare(
+    "SELECT id, name_en FROM main_series_moves"
+  ).all();
+
+  const moveIds = new Map(
+    (moveRows.results || []).map(m => [m.name_en, m.id])
+  );
+
+  const statements = learnsets
+    .filter(l => moveIds.has(l.move))
+    .map(l => env.DB.prepare(`
+      INSERT INTO pokemon_main_moves
+      (pokemon_id, move_id, generation, version_group, learn_method, level)
+      SELECT ?, ?, ?, ?, ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pokemon_main_moves
+        WHERE pokemon_id = ?
+          AND move_id = ?
+          AND generation = ?
+          AND version_group = ?
+          AND learn_method = ?
+      )
+    `).bind(
+      l.pokemon_id,
+      moveIds.get(l.move),
+      l.generation,
+      l.version_group,
+      l.learn_method,
+      l.level,
+      l.pokemon_id,
+      moveIds.get(l.move),
+      l.generation,
+      l.version_group,
+      l.learn_method
+    ));
+
+  let inserted = 0;
+
+  for (let i = 0; i < statements.length; i += 50) {
+    const result = await env.DB.batch(statements.slice(i, i + 50));
+    inserted += result.reduce(
+      (sum, r) => sum + (r.meta?.changes || 0), 0
+    );
+  }
+
+  return json({
+    ok: true,
+    generation,
+    pokemon_count: pokemonList.results?.length || 0,
+    moves: moveStatements.length,
+    learnsets: inserted,
+    failed,
+    next_offset: offset + (pokemonList.results?.length || 0)
+  }, 200, cors);
+}
 
                 // 포켓몬 GO 능력치 조회
         if (path === "/api/admin/go-stats" && request.method === "GET") {
