@@ -699,6 +699,79 @@ if (path === "/api/admin/import/pokemon" && request.method === "POST") {
     completed: end >= 1025
   }, 200, cors);
 }
+  // 본가 기술 정보 분할 수집
+if (path === "/api/admin/import/main-moves" && request.method === "POST") {
+  const body = await request.json().catch(() => ({}));
+
+  const offset = Number(body.offset ?? 0);
+  const limit = Number(body.limit ?? 10);
+
+  if (
+    !Number.isInteger(offset) || offset < 0 ||
+    !Number.isInteger(limit) || limit < 1 || limit > 10
+  ) {
+    return json({ error: "입력값을 확인해 주세요." }, 400, cors);
+  }
+
+  const list = await fetchPokeApi(
+    `https://pokeapi.co/api/v2/move/?offset=${offset}&limit=${limit}`
+  );
+
+  const imported = [];
+  const failed = [];
+
+  for (const item of list.results || []) {
+    try {
+      const move = await fetchPokeApi(item.url);
+
+      imported.push({
+        name_ko: move.names?.find(
+          n => n.language.name === "ko"
+        )?.name || move.name,
+        name_en: move.name,
+        move_type: TYPE_KO[move.type?.name] || move.type?.name || "",
+        category: move.damage_class?.name || "",
+        power: move.power
+      });
+    } catch (e) {
+      failed.push({
+        move: item.name,
+        error: String(e.message || e)
+      });
+    }
+  }
+
+  const statements = imported.map(m =>
+    env.DB.prepare(`
+      INSERT INTO main_series_moves
+      (name_ko, name_en, move_type, category, power)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(name_en) DO UPDATE SET
+        name_ko=excluded.name_ko,
+        move_type=excluded.move_type,
+        category=excluded.category,
+        power=excluded.power
+    `).bind(
+      m.name_ko,
+      m.name_en,
+      m.move_type,
+      m.category,
+      m.power
+    )
+  );
+
+  if (statements.length) {
+    await env.DB.batch(statements);
+  }
+
+  return json({
+    ok: true,
+    fetched: imported.length,
+    failed,
+    next_offset: offset + limit,
+    completed: offset + limit >= list.count
+  }, 200, cors);
+}      
 // 본가 기술 및 포켓몬별 습득 기술 자동 수집
 if (path === "/api/admin/import/main-learnsets" && request.method === "POST") {
   const body = await request.json().catch(() => ({}));
