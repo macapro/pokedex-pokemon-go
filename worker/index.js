@@ -772,21 +772,56 @@ if (path === "/api/admin/import/main-moves" && request.method === "POST") {
     completed: offset + limit >= list.count
   }, 200, cors);
 }      
-// 본가 기술 및 포켓몬별 습득 기술 자동 수집
+// 본가 포켓몬별 습득 기술 분할 수집
 if (path === "/api/admin/import/main-learnsets" && request.method === "POST") {
   const body = await request.json().catch(() => ({}));
 
   const offset = Number(body.offset ?? 0);
-  const limit = Number(body.limit ?? 10);
+  const limit = Number(body.limit ?? 1);
   const generation = Number(body.generation ?? 9);
 
   if (
     !Number.isInteger(offset) || offset < 0 ||
-    !Number.isInteger(limit) || limit < 1 || limit > 10 ||
+    !Number.isInteger(limit) || limit < 1 || limit > 5 ||
     !Number.isInteger(generation) || generation < 1 || generation > 9
   ) {
     return json({ error: "입력값을 확인해 주세요." }, 400, cors);
   }
+
+  // 세대별 버전 그룹
+  const generationVersionGroups = {
+    1: ["red-blue", "yellow"],
+    2: ["gold-silver", "crystal"],
+    3: ["ruby-sapphire", "emerald", "firered-leafgreen"],
+    4: ["diamond-pearl", "platinum", "heartgold-soulsilver"],
+    5: ["black-white", "black-2-white-2"],
+    6: ["x-y", "omega-ruby-alpha-sapphire"],
+    7: [
+      "sun-moon",
+      "ultra-sun-ultra-moon",
+      "lets-go-pikachu-lets-go-eevee"
+    ],
+    8: [
+      "sword-shield",
+      "brilliant-diamond-shining-pearl",
+      "legends-arceus"
+    ],
+    9: ["scarlet-violet"]
+  };
+
+  const allowedGroups = new Set(
+    generationVersionGroups[generation]
+  );
+
+  // DB에 저장된 기술 정보 가져오기
+  const moveRows = await env.DB.prepare(`
+    SELECT id, name_en
+    FROM main_series_moves
+  `).all();
+
+  const moveIds = new Map(
+    (moveRows.results || []).map(m => [m.name_en, m.id])
+  );
 
   const pokemonList = await env.DB.prepare(`
     SELECT id, national_number, slug
@@ -796,9 +831,9 @@ if (path === "/api/admin/import/main-learnsets" && request.method === "POST") {
     LIMIT ? OFFSET ?
   `).bind(limit, offset).all();
 
-  const importedMoves = new Map();
   const learnsets = [];
   const failed = [];
+  const missingMoves = new Set();
 
   for (const p of pokemonList.results || []) {
     try {
@@ -806,53 +841,31 @@ if (path === "/api/admin/import/main-learnsets" && request.method === "POST") {
         `https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(p.slug)}/`
       );
 
-      if (!response.ok) throw new Error(`PokéAPI ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`PokéAPI ${response.status}`);
+      }
 
       const data = await response.json();
 
       for (const move of data.moves || []) {
+        const moveName = move.move.name;
+        const moveId = moveIds.get(moveName);
+
+        // 기술 정보가 DB에 없으면 습득 기술 저장을 건너뜀
+        if (!moveId) {
+          missingMoves.add(moveName);
+          continue;
+        }
+
         for (const detail of move.version_group_details || []) {
           const vg = detail.version_group.name;
-          const genMatch = vg.match(/^(red-blue|gold-silver|ruby-sapphire|diamond-pearl|black-white|x-y|sun-moon|sword-shield|scarlet-violet)/);
 
-          const generationMap = {
-            "red-blue": 1,
-            "gold-silver": 2,
-            "ruby-sapphire": 3,
-            "diamond-pearl": 4,
-            "black-white": 5,
-            "x-y": 6,
-            "sun-moon": 7,
-            "sword-shield": 8,
-            "scarlet-violet": 9
-          };
-
-          const gen = generationMap[genMatch?.[1]];
-          if (gen !== generation) continue;
-
-          const moveName = move.move.name;
-
-          if (!importedMoves.has(moveName)) {
-            const moveResponse = await fetch(move.move.url);
-            if (!moveResponse.ok) continue;
-
-            const moveData = await moveResponse.json();
-
-            importedMoves.set(moveName, {
-              name_en: moveName,
-              name_ko: moveData.names?.find(
-                n => n.language.name === "ko"
-              )?.name || moveName,
-              move_type: moveData.type?.name || "",
-              category: moveData.damage_class?.name || "",
-              power: moveData.power
-            });
-          }
+          if (!allowedGroups.has(vg)) continue;
 
           learnsets.push({
             pokemon_id: p.id,
-            move: moveName,
-            generation: gen,
+            move_id: moveId,
+            generation,
             version_group: vg,
             learn_method: detail.move_learn_method.name,
             level: detail.level_learned_at
@@ -867,80 +880,83 @@ if (path === "/api/admin/import/main-learnsets" && request.method === "POST") {
     }
   }
 
-  const moveStatements = [];
-
-  for (const m of importedMoves.values()) {
-    moveStatements.push(env.DB.prepare(`
-      INSERT INTO main_series_moves
-      (name_ko, name_en, move_type, category, power)
-      VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(name_en) DO UPDATE SET
-        name_ko=excluded.name_ko,
-        move_type=excluded.move_type,
-        category=excluded.category,
-        power=excluded.power
-    `).bind(m.name_ko, m.name_en, m.move_type, m.category, m.power));
-  }
-
-  if (moveStatements.length) {
-    await env.DB.batch(moveStatements);
-  }
-
-  const moveRows = await env.DB.prepare(
-    "SELECT id, name_en FROM main_series_moves"
-  ).all();
-
-  const moveIds = new Map(
-    (moveRows.results || []).map(m => [m.name_en, m.id])
-  );
-
-  const statements = learnsets
-    .filter(l => moveIds.has(l.move))
-    .map(l => env.DB.prepare(`
+  // 습득 기술 중복 방지
+  const statements = learnsets.map(l =>
+    env.DB.prepare(`
       INSERT INTO pokemon_main_moves
-      (pokemon_id, move_id, generation, version_group, learn_method, level)
+      (
+        pokemon_id,
+        move_id,
+        generation,
+        version_group,
+        learn_method,
+        level
+      )
       SELECT ?, ?, ?, ?, ?, ?
       WHERE NOT EXISTS (
-        SELECT 1 FROM pokemon_main_moves
+        SELECT 1
+        FROM pokemon_main_moves
         WHERE pokemon_id = ?
           AND move_id = ?
           AND generation = ?
           AND version_group = ?
           AND learn_method = ?
+          AND COALESCE(level, -1) = COALESCE(?, -1)
       )
     `).bind(
       l.pokemon_id,
-      moveIds.get(l.move),
+      l.move_id,
       l.generation,
       l.version_group,
       l.learn_method,
       l.level,
       l.pokemon_id,
-      moveIds.get(l.move),
+      l.move_id,
       l.generation,
       l.version_group,
-      l.learn_method
-    ));
+      l.learn_method,
+      l.level
+    )
+  );
 
   let inserted = 0;
 
   for (let i = 0; i < statements.length; i += 50) {
-    const result = await env.DB.batch(statements.slice(i, i + 50));
+    const result = await env.DB.batch(
+      statements.slice(i, i + 50)
+    );
+
     inserted += result.reduce(
-      (sum, r) => sum + (r.meta?.changes || 0), 0
+      (sum, r) => sum + (r.meta?.changes || 0),
+      0
     );
   }
+
+  const totalResult = await env.DB.prepare(`
+    SELECT COUNT(*) AS total
+    FROM pokemon
+    WHERE is_published = 1
+  `).first();
+
+  const processed = pokemonList.results?.length || 0;
+  const nextOffset = offset + processed;
+  const total = totalResult?.total || 0;
 
   return json({
     ok: true,
     generation,
-    pokemon_count: pokemonList.results?.length || 0,
-    moves: moveStatements.length,
+    pokemon_count: processed,
+    available_moves: moveIds.size,
+    learnsets_found: learnsets.length,
     learnsets: inserted,
+    missing_moves: [...missingMoves],
     failed,
-    next_offset: offset + (pokemonList.results?.length || 0)
+    next_offset: nextOffset,
+    total_pokemon: total,
+    completed: nextOffset >= total
   }, 200, cors);
 }
+
 
                 // 포켓몬 GO 능력치 조회
         if (path === "/api/admin/go-stats" && request.method === "GET") {
