@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e53935">
+  <title>POKÉDEX포켓몬고</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./"><span class="brand-mark">P</span><span>POKÉDEX<small>포켓몬고</small></span></a>
+    <nav><a href="#dex">도감</a><a href="#about">안내</a><button id="adminOpen" class="outline">관리자</button></nav>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="hero-copy"><p class="eyebrow">POKÉMON DATABASE</p><h1>모든 포켓몬을<br><em>한눈에</em></h1><p>전국도감부터 메가진화와 다양한 폼까지, 나만의 포켓몬 도감을 만나보세요.</p><a class="primary-link" href="#dex">도감 살펴보기 <span>→</span></a></div>
+      <div class="hero-orb"><div class="pokeball"><i></i></div><span>GOTTA KNOW THEM ALL</span></div>
+    </section>
+    <section id="dex" class="dex-section">
+      <div class="section-heading"><div><p class="eyebrow">NATIONAL & FORMS</p><h2>포켓몬 도감</h2></div><span id="count" class="count">불러오는 중…</span></div>
+      <div class="filters"><label class="search"><span>⌕</span><input id="search" placeholder="이름 또는 도감 번호 검색"></label><select id="typeFilter"><option value="">모든 타입</option><option>노말</option><option>불꽃</option><option>물</option><option>전기</option><option>풀</option><option>얼음</option><option>격투</option><option>독</option><option>땅</option><option>비행</option><option>에스퍼</option><option>벌레</option><option>바위</option><option>고스트</option><option>드래곤</option><option>악</option><option>강철</option><option>페어리</option></select></div>
+      <div id="grid" class="pokemon-grid"><div class="empty">도감 데이터를 불러오고 있습니다.</div></div>
+    </section>
+    <section id="about" class="about"><p class="eyebrow">YOUR POKÉDEX</p><h2>직접 채워가는 포켓몬 도감</h2><p>도감 데이터는 관리자만 등록·수정·공개할 수 있습니다.</p></section>
+  </main>
+  <footer>POKÉDEX포켓몬고 <span>Independent Pokémon database</span></footer>
+
+  <dialog id="adminDialog">
+    <div class="dialog-head"><div><p class="eyebrow">ADMIN CONSOLE</p><h2>관리자 센터</h2></div><button class="icon-btn" id="adminClose" aria-label="닫기">×</button></div>
+    <div id="loginPanel"><p class="muted">관리자 비밀번호를 입력하세요.</p><form id="loginForm"><input id="adminPassword" type="password" placeholder="관리자 비밀번호" required><button class="primary" type="submit">로그인</button></form><p id="loginMessage" class="message"></p></div>
+    <div id="adminPanel" hidden>
+      <div class="admin-toolbar"><strong>도감 데이터 관리</strong><button id="logout" class="outline">로그아웃</button></div>
+      <form id="pokemonForm" class="editor">
+        <input type="hidden" id="editId">
+        <div class="form-grid">
+          <label>전국도감 번호<input id="number" type="number" min="1" required></label>
+          <label>한국어 이름<input id="koreanName" required></label>
+          <label>영문 이름<input id="englishName"></label>
+          <label>고유 ID (영문 소문자)<input id="slug" placeholder="pikachu" pattern="[a-z0-9-]+" required></label>
+          <label>폼 이름<input id="formName" value="기본폼"></label>
+          <label>세대<input id="generation" type="number" min="1" max="20"></label>
+          <label>지역/폼 설명<input id="region"></label>
+          <label>이미지 URL<input id="imageUrl" type="url" placeholder="https://..."></label>
+          <label>첫 번째 타입<input id="type1"></label>
+          <label>두 번째 타입<input id="type2"></label>
+          <label class="wide">도감 설명<textarea id="description" rows="3"></textarea></label>
+          <label class="check wide"><input id="published" type="checkbox"> 일반 이용자에게 공개</label>
+        </div>
+        <div class="form-actions"><button type="button" id="resetForm" class="outline">새 항목</button><button class="primary" type="submit">저장</button></div>
+      </form>
+      <div id="adminList" class="admin-list"></div>
+      <p id="adminMessage" class="message"></p>
+    </div>
+  </dialog>
+  <script src="./app.js"></script>
+</body>
+</html>
