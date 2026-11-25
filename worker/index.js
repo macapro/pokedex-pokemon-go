@@ -67,6 +67,104 @@ function validPokemon(body) {
     sort_order: Number(body.sort_order) || 0
   };
 }
+// 포켓몬 전국도감 데이터 가져오기
+const TYPE_KO = {
+  normal: "노말",
+  fire: "불꽃",
+  water: "물",
+  electric: "전기",
+  grass: "풀",
+  ice: "얼음",
+  fighting: "격투",
+  poison: "독",
+  ground: "땅",
+  flying: "비행",
+  psychic: "에스퍼",
+  bug: "벌레",
+  rock: "바위",
+  ghost: "고스트",
+  dragon: "드래곤",
+  dark: "악",
+  steel: "강철",
+  fairy: "페어리"
+};
+
+const GENERATION_NUMBER = {
+  "generation-i": 1,
+  "generation-ii": 2,
+  "generation-iii": 3,
+  "generation-iv": 4,
+  "generation-v": 5,
+  "generation-vi": 6,
+  "generation-vii": 7,
+  "generation-viii": 8,
+  "generation-ix": 9
+};
+
+const GENERATION_REGION = {
+  1: "관동",
+  2: "성도",
+  3: "호연",
+  4: "신오",
+  5: "하나",
+  6: "칼로스",
+  7: "알로라",
+  8: "가라르",
+  9: "팔데아"
+};
+
+async function fetchPokeApi(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("PokéAPI 요청 실패: " + response.status);
+  }
+  return response.json();
+}
+
+async function fetchPokemonImportItem(id) {
+  const species = await fetchPokeApi(
+    `https://pokeapi.co/api/v2/pokemon-species/${id}/`
+  );
+
+  const koreanName =
+    species.names?.find(n => n.language.name === "ko")?.name || "";
+
+  const englishName = species.name;
+
+  const defaultVariety = species.varieties?.find(v => v.is_default);
+  if (!defaultVariety?.pokemon?.url) {
+    throw new Error(`기본 포켓몬 정보를 찾을 수 없습니다: ${id}`);
+  }
+
+  const pokemon = await fetchPokeApi(defaultVariety.pokemon.url);
+
+  const types = (pokemon.types || [])
+    .sort((a, b) => a.slot - b.slot)
+    .map(t => TYPE_KO[t.type.name] || t.type.name);
+
+  const generation = GENERATION_NUMBER[species.generation?.name] || null;
+
+  const imageUrl =
+    pokemon.sprites?.other?.["official-artwork"]?.front_default ||
+    pokemon.sprites?.front_default ||
+    "";
+
+  return {
+    national_number: species.id,
+    slug: species.name,
+    korean_name: koreanName || englishName,
+    english_name: englishName,
+    form_name: "기본폼",
+    generation,
+    region: GENERATION_REGION[generation] || "",
+    image_url: imageUrl,
+    type1: types[0] || "",
+    type2: types[1] || "",
+    description: "",
+    is_published: 1,
+    sort_order: species.id
+  };
+}
 
 export default {
   async fetch(request, env) {
