@@ -1,5 +1,5 @@
 // 배포 후 본인의 Cloudflare Worker 주소로 바꾸세요.
-const API_BASE = "https://PUT-YOUR-WORKER-URL-HERE";
+const API_BASE = "https://pokedex-pokemon-go.gaiogaang16.workers.dev";
 const $ = (id) => document.getElementById(id);
 const dialog = $("adminDialog");
 let adminItems = [];
