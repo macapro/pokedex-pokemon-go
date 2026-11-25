@@ -1,5 +1,5 @@
 
-name = "pokedex-pokemon-go-api"
+name = "pokedex-pokemon-go"
 main = "worker/index.js"
 compatibility_date = "2026-11-25"
 
