@@ -144,15 +144,14 @@ const GENERATION_REGION = {
   9: "팔데아"
 };
 
-fetchPokeApi(url) {
-  const response = await fetch(url);
+async function fetchPokeApi(url) {
   if (!response.ok) {
     throw new Error("PokéAPI 요청 실패: " + response.status);
   }
   return response.json();
 }
 
-fetchPokemonImportItem(id) {
+async function fetchPokemonImportItem(id) {
   const species = await fetchPokeApi(
     `https://pokeapi.co/api/v2/pokemon-species/${id}/`
   );
