@@ -135,12 +135,18 @@ async function openPokemonDetail(id) {
         )
       )}
 
-      ${section("본가 기술", data.main_moves,
-        m => item(
-          m.name_ko || m.name_en,
-          `${m.generation || "-"}세대 · ${m.learn_method || "-"} · 레벨 ${m.level ?? "-"}`
-        )
-      )}
+    ${section("본가 기술", 
+  [...new Map(
+    data.main_moves.map(m => [
+      `${m.generation}|${m.name_en}|${m.learn_method}|${m.level}`,
+      m
+    ])
+  ).values()],
+  m => item(
+    m.name_ko || m.name_en,
+    `${m.generation || "-"}세대 · ${m.learn_method || "-"} · 레벨 ${m.level ?? "-"}`
+  )
+)}
 
       ${section("폼", data.forms,
         f => item(
