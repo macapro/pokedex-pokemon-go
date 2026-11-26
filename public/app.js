@@ -135,13 +135,18 @@ async function openPokemonDetail(id) {
         )
       )}
 
-  ${section("본가 기술",
+ ${section("본가 기술",
   [...new Map(
     data.main_moves.map(m => [
       m.name_ko || m.name_en,
       m
     ])
-  ).values()],
+  ).values()].sort((a, b) =>
+    (a.name_ko || a.name_en).localeCompare(
+      b.name_ko || b.name_en,
+      "ko"
+    )
+  ),
   m => item(
     m.name_ko || m.name_en,
     ""
