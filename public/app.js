@@ -512,7 +512,7 @@ async function mainImportCollectGeneration(gen) {
 
   s.phase = "learnsets";
   s.generation = gen;
-  s.offset = 0;
+ s.offset = 0;
 
   s.generationStatus[gen] = "수집 중";
   mainImportRender();
