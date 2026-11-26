@@ -3,7 +3,38 @@ const json = (data, status = 200, extra = {}) =>
     status,
     headers: { "Content-Type": "application/json; charset=utf-8", ...extra }
   });
-
+async function saveImportProgress(
+  env,
+  task,
+  generation,
+  nextOffset,
+  total,
+  status = "running"
+) {
+  await env.DB.prepare(`
+    INSERT INTO import_progress (
+      task,
+      generation,
+      next_offset,
+      total,
+      status,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(task) DO UPDATE SET
+      generation = excluded.generation,
+      next_offset = excluded.next_offset,
+      total = excluded.total,
+      status = excluded.status,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(
+    task,
+    generation,
+    nextOffset,
+    total,
+    status
+  ).run();
+}
 const encoder = new TextEncoder();
 
 function b64url(bytes) {
@@ -113,7 +144,7 @@ const GENERATION_REGION = {
   9: "팔데아"
 };
 
-async function fetchPokeApi(url) {
+fetchPokeApi(url) {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error("PokéAPI 요청 실패: " + response.status);
@@ -121,7 +152,7 @@ async function fetchPokeApi(url) {
   return response.json();
 }
 
-async function fetchPokemonImportItem(id) {
+fetchPokemonImportItem(id) {
   const species = await fetchPokeApi(
     `https://pokeapi.co/api/v2/pokemon-species/${id}/`
   );
@@ -592,6 +623,22 @@ export default {
 
       if (path.startsWith("/api/admin/")) {
         if (!admin) return json({ error: "관리자 로그인이 필요합니다." }, 401, cors);
+        // 수집 진행 상태 조회
+if (
+  request.method === "GET" &&
+  path === "/api/admin/import/progress"
+) {
+  const result = await env.DB.prepare(`
+    SELECT task, generation, next_offset, total, status, updated_at
+    FROM import_progress
+    ORDER BY generation ASC
+  `).all();
+
+  return json({
+    ok: true,
+    progress: result.results || []
+  }, 200, cors);
+}
         // 전국도감 포켓몬 데이터 일괄 가져오기
 if (path === "/api/admin/import/pokemon" && request.method === "POST") {
   let body = {};
@@ -776,9 +823,22 @@ if (path === "/api/admin/import/main-moves" && request.method === "POST") {
 if (path === "/api/admin/import/main-learnsets" && request.method === "POST") {
   const body = await request.json().catch(() => ({}));
 
-  const offset = Number(body.offset ?? 0);
-  const limit = Number(body.limit ?? 1);
-  const generation = Number(body.generation ?? 9);
+ const limit = Number(body.limit ?? 1);
+const generation = Number(body.generation ?? 9);
+
+const task = `main-learnsets-gen-${generation}`;
+
+const savedProgress = await env.DB.prepare(`
+  SELECT next_offset
+  FROM import_progress
+  WHERE task = ?
+`).bind(task).first();
+
+const offset = Number(
+  body.resume === false
+    ? (body.offset ?? 0)
+    : (savedProgress?.next_offset ?? body.offset ?? 0)
+);
 
   if (
     !Number.isInteger(offset) || offset < 0 ||
@@ -941,7 +1001,15 @@ if (path === "/api/admin/import/main-learnsets" && request.method === "POST") {
   const processed = pokemonList.results?.length || 0;
   const nextOffset = offset + processed;
   const total = totalResult?.total || 0;
-
+await saveImportProgress(
+  env,
+  task,
+  generation,
+  failed.length > 0 ? offset : nextOffset,
+  total,
+  failed.length > 0 ? "error" :
+    nextOffset >= total ? "completed" : "running"
+);
   return json({
     ok: true,
     generation,
