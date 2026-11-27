@@ -537,14 +537,19 @@ async function mainImportCollectGeneration(gen) {
       }
     );
 
-    if (result.failed && result.failed.length > 0) {
-      mainImportLog(
-        `${gen}세대 수집 실패 ${result.failed.length}건. 저장된 위치에서 다시 시작할 수 있습니다.`
-      );
+  if (result.failed && result.failed.length > 0) {
+  result.failed.forEach(item => {
+    mainImportLog(
+      `실패 포켓몬: ${item.pokemon} / 원인: ${item.error}`
+    );
+  });
 
-      throw new Error(`${gen}세대 수집 중 실패가 발생했습니다.`);
-    }
+  mainImportLog(
+    `${gen}세대 수집 실패 ${result.failed.length}건. 저장된 위치를 유지합니다.`
+  );
 
+  throw new Error(`${gen}세대 수집 중 실패가 발생했습니다.`);
+}
     s.offset = result.next_offset;
     s.total = result.total_pokemon || 0;
 
