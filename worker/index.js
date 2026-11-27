@@ -899,15 +899,25 @@ const offset = Number(
 
   for (const p of pokemonList.results || []) {
     try {
-      const response = await fetch(
-        `https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(p.slug)}/`
-      );
+    let data;
 
-      if (!response.ok) {
-        throw new Error(`PokéAPI ${response.status}`);
-      }
+try {
+  data = await fetchPokeApi(
+    `https://pokeapi.co/api/v2/pokemon/${encodeURIComponent(p.slug)}/`
+  );
+} catch (error) {
+  const species = await fetchPokeApi(
+    `https://pokeapi.co/api/v2/pokemon-species/${encodeURIComponent(p.slug)}/`
+  );
 
-      const data = await response.json();
+  const defaultVariety = species.varieties?.find(v => v.is_default);
+
+  if (!defaultVariety?.pokemon?.url) {
+    throw error;
+  }
+
+  data = await fetchPokeApi(defaultVariety.pokemon.url);
+}
 
       for (const move of data.moves || []) {
         const moveName = move.move.name;
