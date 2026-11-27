@@ -11,7 +11,13 @@ function api(path, options = {}) {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) }
   }).then(async r => {
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error || `요청 실패 (${r.status})`);
+   if (!r.ok) {
+  throw new Error(
+    data.detail
+      ? `${data.error}: ${data.detail}`
+      : data.error || `요청 실패 (${r.status})`
+  );
+}
     return data;
   });
 }
