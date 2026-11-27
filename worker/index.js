@@ -145,9 +145,12 @@ const GENERATION_REGION = {
 };
 
 async function fetchPokeApi(url) {
+  const response = await fetch(url);
+
   if (!response.ok) {
     throw new Error("PokéAPI 요청 실패: " + response.status);
   }
+
   return response.json();
 }
 
